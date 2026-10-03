@@ -159,3 +159,30 @@ The full Smart engine correctly kept the original after 141 s; even the extra 85
 Product correction: Review had shown ≈80 MB for this 394 MiB video using the 0.10-bpp best case. That was a poor prediction of quality-verified output. In 1.0.2, video estimates are displayed as a best-case-to-85% range **or skip**, quality failures include measured scores, and the Report offers an opt-in Max retry that always keeps the original. Host tests passed (75 core assertions, 60 adversarial JPEG cases); signed APK verification passed, SHA-256 `7F8ADBA46467C25D4DA932FD4F5945B8F19F431DF760B752A8A44C0419717899`. VersionCode 5 installed on the POCO without clearing app data. On-phone UI check: the Report showed **Try Max · keep original** for the Smart skip; its warning dialog explicitly said nothing would move to Trash, and was canceled without starting work. A read-only rescan showed 2,557 candidates, zero selected, and the fourth video's range `79.8–334.9 MB or skip`. No service or crash entry appeared. Max publishing, Gallery playback and comparison still need an owner-approved trial on a copy, not an original.
 
 Post-release end-to-end QA (owner approved temporary QA media access): generated `CompactTest_motion.mp4` (8 s, AVC 1080p30, no audio) was added to Camera. Compact QA's scanner showed exactly that one selectable item, excluding all owner media. With Smart + Keep originals, the foreground service completed 1/1; Report said DONE/kept both and showed **26,291,027 B → 7,778,493 B** (70.4% smaller), SSIM .99504. The generated source SHA-256 stayed `f71f95ca…ddadabadf4`. Compare visibly opened the compressed video and switched to the original. `logcat -b crash` remained empty. The two generated Camera files and QA app were removed; temporary QA screenshot was removed. This fixture had no audio, so UI sound playback remains unverified, although real-video engine tests above verified copied audio digests. The Max retry's confirmation dialog was verified on release 1.0.2 but not actually started on an owner video.
+
+## 2026-10-03 — 1.0.3 reviewed deletion flow on POCO F5
+
+The owner's Max video is present in MediaStore as an ordinary non-pending, non-trashed Camera video: original
+413,095,773 B and copy 278,897,353 B (32.5% smaller), both dated 10 Jan 2024. The original remains outside Trash.
+The installed 1.0.3 Report visibly showed the exact saved path, date, **Open saved copy**, and a per-file
+**After checking: move original to Trash** button. Its review checkbox was disabled by default; the dialog was
+canceled without checking it or requesting Trash. No owner's media was selected, moved, renamed, or deleted.
+
+Safety changes: a kept result can be promoted for *one-file* system Trash approval only after an explicit review
+acknowledgment. Just before the request, Compact rehashes the source and output and checks the published copy's
+owner, folder, capture date, MIME, size, and pending/trashed flags. Permanent deletion rechecks the output and
+requires a separate backup/viewing acknowledgment. Report provides a direct viewer action and output location.
+
+POCO QA instrumentation on a generated `CompactTest_review_*` JPEG passed kept-copy publication, reviewed-Trash
+preflight, rejection of a deliberately wrong output hash, actual MediaStore Trash transition, purge preflight,
+and Restore (original untrashed with its hash unchanged; QA copy removed). All generated MediaStore rows were
+removed; `Compact QA` was the only package involved. Desktop tests: **78 assertions + 60 adversarial JPEG cases
+passed**; release/QA APK signing verified; crash log empty.
+
+Important failure: an artificial JPEG with a manually seeded nonzero `DATE_TAKEN` was re-indexed by HyperOS as
+`DATE_TAKEN=0` when published. Even repeated updates could not keep the value. Compact **rejected and removed the
+new copy, leaving the original intact**. The Trash/Restore test therefore used a separate undated synthetic fixture.
+This is not proof that ordinary camera photos have the same problem, but photo dates on the POCO are not universally
+verified. The system confirmation UI for the new reviewed one-file Trash action was not exercised on personal media;
+the underlying Trash/Restore API path was tested only on generated media. No test can certify that Max looks good
+in every video scene or that an external backup exists.

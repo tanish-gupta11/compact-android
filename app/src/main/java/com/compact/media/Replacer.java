@@ -54,19 +54,33 @@ public final class Replacer {
       if (!job.outputHash.equals(Files.hash(c.getContentResolver().openInputStream(uri))))
         throw new IOException("Published bytes did not verify");
       ContentValues done = new ContentValues();
-      done.put("datetaken", job.item.dateTaken);
       done.put(MediaStore.MediaColumns.IS_PENDING, 0);
       c.getContentResolver().update(uri, done, null, null);
       preserveDate(c, uri, job.item.dateModified);
+      // Publishing can trigger a provider metadata scan. Set the capture date after that transition.
+      ContentValues date = new ContentValues();
+      date.put("datetaken", job.item.dateTaken);
+      for (int attempt = 0; attempt < 5; attempt++) {
+        c.getContentResolver().update(uri, date, null, null);
+        try (Cursor stamp = c.getContentResolver().query(uri, new String[] {"datetaken"},
+            null, null, null)) {
+          if (stamp != null && stamp.moveToFirst() && stamp.getLong(0) == job.item.dateTaken)
+            break;
+        }
+        Thread.sleep(200);
+      }
       try (Cursor cursor =
           c.getContentResolver()
               .query(uri, new String[] {"datetaken", "relative_path", "_size"}, null, null, null)) {
-        if (cursor == null
-            || !cursor.moveToFirst()
-            || cursor.getLong(0) != job.item.dateTaken
-            || !Objects.equals(cursor.getString(1), job.item.path)
-            || cursor.getLong(2) != source.length())
-          throw new IOException("Gallery metadata did not verify");
+        if (cursor == null || !cursor.moveToFirst())
+          throw new IOException("Gallery copy could not be reopened");
+        if (cursor.getLong(0) != job.item.dateTaken)
+          throw new IOException("Gallery date differs after publishing: " + cursor.getLong(0)
+              + " instead of " + job.item.dateTaken);
+        if (!Objects.equals(cursor.getString(1), job.item.path))
+          throw new IOException("Gallery folder differs after publishing");
+        if (cursor.getLong(2) != source.length())
+          throw new IOException("Gallery copy size differs after publishing");
       }
       db.state(
           job.id,
@@ -159,9 +173,11 @@ public final class Replacer {
   /** Before permanently deleting a trashed original, the compressed copy must still be intact. */
   public static void ensurePurgeSafe(Context c, JobQueue.Job j) throws Exception {
     if (j.state != JobState.ORIGINAL_TRASHED || j.outputUri == null) throw new IOException("Not replaced");
+    if (!isTrashed(c, j.item.uri)) throw new IOException("Original is not in system Trash");
     if (!j.outputHash.equals(
         Files.hash(c.getContentResolver().openInputStream(Uri.parse(j.outputUri)))))
       throw new IOException(j.item.name + ": compressed copy changed or is missing; original kept");
+    verifyGalleryCopy(c, j);
   }
 
   public static boolean isTrashed(Context c, Uri uri) {
@@ -174,11 +190,42 @@ public final class Replacer {
 
   public static void ensureTrashSafe(Context c, JobQueue.Job j) throws Exception {
     if (!j.state.canTrash() || j.outputUri == null) throw new IOException("Copy is not ready");
+    if (isTrashed(c, j.item.uri)) throw new IOException("Original is already in Trash");
     if (!j.sourceHash.equals(Files.hash(Files.original(c, j.item.uri))))
       throw new IOException("Original changed since compression; keep both");
     if (!j.outputHash.equals(
         Files.hash(c.getContentResolver().openInputStream(Uri.parse(j.outputUri)))))
       throw new IOException("Compressed copy changed or is missing");
+    verifyGalleryCopy(c, j);
+  }
+
+  /** A Keep originals result is eligible for Trash only after the owner reviews that exact copy. */
+  public static void prepareReviewedTrash(Context c, JobQueue db, JobQueue.Job j) throws Exception {
+    if (j.state != JobState.DONE || j.trash || j.outputUri == null || j.sourceHash == null)
+      throw new IOException("No kept copy is available for review");
+    if (isTrashed(c, j.item.uri)) throw new IOException("Original is already in Trash");
+    if (!j.sourceHash.equals(Files.hash(Files.original(c, j.item.uri))))
+      throw new IOException("Original changed since compression; keep both");
+    if (!j.outputHash.equals(
+        Files.hash(c.getContentResolver().openInputStream(Uri.parse(j.outputUri)))))
+      throw new IOException("Compressed copy changed or is missing");
+    verifyGalleryCopy(c, j);
+    db.state(j.id, JobState.PUBLISHED, "Reviewed copy ready for system Trash approval");
+  }
+
+  private static void verifyGalleryCopy(Context c, JobQueue.Job j) throws Exception {
+    try (Cursor q = c.getContentResolver().query(Uri.parse(j.outputUri),
+        new String[] {"relative_path", "_size", "datetaken", "is_pending", "is_trashed",
+            "mime_type", "owner_package_name"}, null, null, null)) {
+      if (q == null || !q.moveToFirst()
+          || !Objects.equals(q.getString(0), j.item.path)
+          || q.getLong(1) != j.outputSize
+          || q.getLong(2) != j.item.dateTaken
+          || q.getInt(3) != 0 || q.getInt(4) != 0
+          || !Objects.equals(q.getString(5), j.mime)
+          || !Objects.equals(q.getString(6), c.getPackageName()))
+        throw new IOException("Compressed copy is not correctly published in Gallery; original kept");
+    }
   }
 
   public static void finishTrash(Context c, JobQueue db, JobQueue.Job j) throws Exception {
@@ -187,10 +234,12 @@ public final class Replacer {
       return;
     }
     db.state(j.id, JobState.ORIGINAL_TRASHED, "Original is in system Trash");
+    verifyGalleryCopy(c, j);
     String ext = j.mime.equals("video/mp4") ? "mp4" : j.mime.equals("image/heic") ? "heic" : "jpg";
     ContentValues name = new ContentValues();
     name.put("_display_name", j.item.base() + "." + ext);
-    c.getContentResolver().update(Uri.parse(j.outputUri), name, null, null);
+    if (c.getContentResolver().update(Uri.parse(j.outputUri), name, null, null) != 1)
+      throw new IOException("Original is safely in Trash, but Gallery rename failed; restore it here if needed");
   }
 
   public static void finishRestore(Context c, JobQueue db, JobQueue.Job j) throws Exception {

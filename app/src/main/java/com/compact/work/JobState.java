@@ -60,6 +60,9 @@ public enum JobState {
         return next == ORIGINAL_TRASHED || next == DONE;
       case ORIGINAL_TRASHED:
         return next == RESTORED || next == DONE;
+      case DONE:
+        // A kept copy can be reviewed later, then explicitly submitted for Trash.
+        return next == PUBLISHED;
       default:
         return false;
     }

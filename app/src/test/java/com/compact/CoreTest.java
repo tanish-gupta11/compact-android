@@ -108,6 +108,9 @@ public final class CoreTest {
     check(JobState.ENCODING.recovered() == JobState.PENDING, "Encoding recovery");
     check(JobState.PUBLISHED.recovered() == JobState.PUBLISHED, "No re-encoding published");
     check(!JobState.VERIFIED.canTrash(), "No premature trash");
+    check(JobState.DONE.allows(JobState.PUBLISHED), "Reviewed kept copy can request Trash");
+    check(!JobState.DONE.canTrash(), "Kept copy cannot be trashed before review");
+    check(JobState.PUBLISHED.canTrash(), "Reviewed published copy can request Trash");
     for (boolean progressive : new boolean[] {false, true})
       for (float quality : new float[] {.5f, .9f, 1f})
         for (int type : new int[] {BufferedImage.TYPE_INT_RGB, BufferedImage.TYPE_BYTE_GRAY}) {

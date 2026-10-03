@@ -1,10 +1,12 @@
 # Compact
 
-Compact is an offline Android app that frees storage by re-compressing camera photos and videos with no visible
-quality loss, and only replaces an original after the smaller copy has been verified.
+Compact is an offline Android app that makes smaller camera-photo and video copies. Smart and Max are **lossy**:
+automated checks reject many degraded results, but cannot guarantee every scene looks the same to you. Never
+permanently delete an irreplaceable original without checking the copy and keeping a separate backup.
 
-**Version 1.0**: device-tested on a Samsung SM-X115 (Android 16) with generated `CompactTest_*` media; see
-`TEST_REPORT.md`. Not yet run on a POCO F5; use the checklist below first.
+**Version 1.0.3**: device-tested on a Samsung SM-X115 and POCO F5 with generated `CompactTest_*` media; see
+`TEST_REPORT.md` for passes and remaining limitations. Real POCO videos showed that Smart may correctly skip
+difficult footage and Max may visibly soften detail.
 
 ## What it does
 
@@ -14,9 +16,11 @@ quality loss, and only replaces an original after the smaller copy has been veri
 - **Lossless:** repacks JPEGs with optimal Huffman tables; every pixel stays identical (typically 3–15% smaller).
   Smart also falls back to this automatically when a lossy copy would not save at least 15%.
 - **Max saving:** looser gate (PSNR ≥ 36 dB) for more space.
-- Keeps resolution, frame rate, rotation, date, GPS and all photo EXIF. Gallery order is unchanged.
+- Checks resolution, frame rate, rotation, date, GPS and photo EXIF before accepting a result. If the phone's
+  media provider cannot preserve a required date, Compact rejects that output and keeps the original.
 - Originals go to Android's system Trash only after you approve; **Recently replaced** restores them, or
-  **Free up space now** permanently deletes them (Trash otherwise keeps using space for about 30 days).
+  **Free up space now** permanently deletes them (Trash otherwise keeps using space for about 30 days). Version
+  1.0.3 lets you review a kept result and request Trash for just that original after both files are rechecked.
 - Pauses safely on low battery, heat or low storage; survives being killed mid-file (originals untouched).
 - No internet permission, accounts, ads or analytics.
 
@@ -58,12 +62,17 @@ identical. Real savings depend on your camera's files.
   encoder may need substantially more data to preserve detail than the optimistic estimate suggests. A fourth real
   POCO clip was skipped in Smart even at an 85%-size test output; Max saved 32% on a private copy. For a Smart skip,
   Report offers **Try Max · keep original**. This never Trashes the source; compare picture and sound before keeping
-  the result.
+  the result. The Report shows the exact saved path and capture date. After checking the copy, you can request
+  system Trash for that one original. The original remains recoverable only while Android retains it; **Free up
+  space now** is irreversible.
+- On the POCO F5, an artificial QA JPEG with a manually seeded nonzero Gallery date was re-indexed by HyperOS with
+  `DATE_TAKEN=0` when published. Compact rejected the copy and retained the original. Do not assume every photo
+  format/date combination works merely because video tests pass.
 
 ## Build and tests
 
 ```powershell
-.\tools\test.ps1          # 75 assertions + 60 lossless-JPEG round trips (desktop JVM)
+.\tools\test.ps1          # 78 assertions + 60 lossless-JPEG round trips (desktop JVM)
 .\tools\build.ps1         # signed releases\compact.apk
 .\tools\build.ps1 -Qa     # build\compact-qa.apk: debuggable, only touches CompactTest_* files
 .\tools\verify-apk.ps1

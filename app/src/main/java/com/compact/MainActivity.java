@@ -673,11 +673,38 @@ public final class MainActivity extends Activity {
                 15,
                 Ui.GREEN));
         if (j.outputUri != null && j.state != JobState.RESTORED) {
+          String savedName = j.state == JobState.ORIGINAL_TRASHED
+              || (j.state == JobState.DONE && j.trash)
+              ? j.item.base() + ("image/heic".equals(j.mime) ? ".heic"
+                  : "video/mp4".equals(j.mime) ? ".mp4" : ".jpg")
+              : j.publishName;
+          Ui.add(card, Ui.text(this,
+              "Saved in " + j.item.path + savedName + "\nGallery date: "
+                  + new java.text.SimpleDateFormat("d MMM yyyy", Locale.getDefault())
+                      .format(new Date(j.item.dateTaken)),
+              13, Ui.MUTED));
           Button compare = Ui.button(this, "Compare", false);
           compare.setOnClickListener(
               v -> startActivity(new Intent(this, CompareActivity.class).putExtra("id", j.id)));
           Ui.add(card, compare);
+          Button open = Ui.button(this, "Open saved copy", false);
+          open.setOnClickListener(v -> {
+            try {
+              Intent view = new Intent(Intent.ACTION_VIEW)
+                  .setDataAndType(Uri.parse(j.outputUri), j.mime)
+                  .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+              startActivity(view);
+            } catch (Exception e) {
+              message("No viewer opened this copy. Check the saved path above in Gallery or Files.");
+            }
+          });
+          Ui.add(card, open);
         }
+      }
+      if (!recent && j.state == JobState.DONE && !j.trash && j.outputUri != null) {
+        Button reviewed = Ui.button(this, "After checking: move original to Trash", false);
+        reviewed.setOnClickListener(v -> reviewForTrash(j));
+        Ui.add(card, reviewed);
       }
       if (!recent && j.item.video && j.state == JobState.SKIPPED && j.mode == 0) {
         Button retry = Ui.button(this, "Try Max · keep original", false);
@@ -727,11 +754,52 @@ public final class MainActivity extends Activity {
         });
   }
 
+  private void reviewForTrash(JobQueue.Job j) {
+    CheckBox checked = new CheckBox(this);
+    checked.setText(j.item.video
+        ? "I watched this saved copy, checked its sound, picture and orientation, and found it in Gallery or Files."
+        : "I opened this saved copy, checked its detail and orientation, and found it in Gallery or Files.");
+    checked.setPadding(24, 16, 24, 16);
+    AlertDialog dialog = new AlertDialog.Builder(this)
+        .setTitle("Move this original to system Trash?")
+        .setMessage("Only " + j.item.name + " will be requested. Compact will recheck both files first. "
+            + "The original can be restored while Android retains it (often about 30 days). "
+            + "Do not permanently delete it until you have a separate backup of anything precious.")
+        .setView(checked)
+        .setNegativeButton("Keep original", null)
+        .setPositiveButton("Verify and request Trash", (d, w) -> trashReviewed(j.id))
+        .create();
+    dialog.setOnShowListener(d -> {
+      Button positive = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
+      positive.setEnabled(false);
+      checked.setOnCheckedChangeListener((button, yes) -> positive.setEnabled(yes));
+    });
+    dialog.show();
+  }
+
+  private void trashReviewed(long id) {
+    task("Rechecking this original and saved copy…", () -> {
+      JobQueue.Job j = db.get(id);
+      Replacer.prepareReviewedTrash(this, db, j);
+      j = db.get(id);
+      Replacer.ensureTrashSafe(this, j);
+      PendingIntent request = MediaStore.createTrashRequest(
+          getContentResolver(), Collections.singletonList(j.item.uri), true);
+      prefs.edit().putString("trashRequest", Long.toString(id)).commit();
+      runOnUiThread(() -> send(request, 51));
+    });
+  }
+
   private void purge() {
-    new AlertDialog.Builder(this)
+    CheckBox checked = new CheckBox(this);
+    checked.setText("I opened and played the saved copies, and backed up any irreplaceable originals.");
+    checked.setPadding(24, 16, 24, 16);
+    AlertDialog dialog = new AlertDialog.Builder(this)
         .setTitle("Permanently delete originals?")
         .setMessage("The compressed copies stay in your Gallery. The originals in Trash are deleted"
-            + " for good and cannot be restored afterwards.")
+            + " for good and cannot be restored afterwards. Max is lossy; file checks cannot"
+            + " guarantee you will like the picture or sound.")
+        .setView(checked)
         .setNegativeButton("Cancel", null)
         .setPositiveButton("Continue", (d, w) -> task(
             "Checking compressed copies…",
@@ -750,7 +818,13 @@ public final class MainActivity extends Activity {
               prefs.edit().putString("purgeRequest", ids.toString()).commit();
               runOnUiThread(() -> send(request, 53));
             }))
-        .show();
+        .create();
+    dialog.setOnShowListener(d -> {
+      Button positive = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
+      positive.setEnabled(false);
+      checked.setOnCheckedChangeListener((button, yes) -> positive.setEnabled(yes));
+    });
+    dialog.show();
   }
 
   private void reconcilePurge() {
@@ -828,7 +902,7 @@ public final class MainActivity extends Activity {
   }
 
   private void settings() {
-    label("Compact 1.0 · offline · no accounts · no advertising");
+    label("Compact 1.0.3 · offline · no accounts · no advertising");
     Spinner defaultMode =
         spinner(
             new String[] {"Default: Smart", "Default: Lossless photos", "Default: Max saving"},
