@@ -209,7 +209,8 @@ public final class MainActivity extends Activity {
             this,
             scanned.isEmpty()
                 ? "Scan to find photos and videos worth compressing."
-                : "≈ " + Ui.size(saving) + " smaller copies · estimates, not guarantees",
+                : "Best-case bitrate estimate: up to ≈ " + Ui.size(saving)
+                    + ". Smart may skip videos that lose detail.",
             14,
             Ui.MUTED));
     Ui.add(body, hero);
@@ -371,8 +372,8 @@ public final class MainActivity extends Activity {
           before += m.size;
           after += estimate(m);
         }
-      count.setText(visible.size() + " shown · " + selected.size() + " selected · ≈ "
-          + Ui.size(Math.max(0, before - after)) + " to save");
+      count.setText(visible.size() + " shown · " + selected.size() + " selected · best-case up to ≈ "
+          + Ui.size(Math.max(0, before - after)) + " (may save less or skip)");
       go.setText(selected.isEmpty() ? "Select files to compress" : "Compress " + selected.size() + (selected.size() == 1 ? " file…" : " files…"));
     };
     refresh.run();
@@ -439,7 +440,10 @@ public final class MainActivity extends Activity {
                     + "  "
                     + Ui.size(m.size)
                     + " → ≈ "
-                    + Ui.size(estimate(m)));
+                    + (m.video
+                        ? Ui.size(Math.min(estimate(m), (long) (m.size * .85))) + "–"
+                            + Ui.size((long) (m.size * .85)) + " or skip"
+                        : Ui.size(estimate(m))));
             choice.setPadding(8, 16, 8, 16);
             choice.setChecked(selected.contains(m.uri.toString()));
             choice.setOnCheckedChangeListener(
@@ -674,6 +678,24 @@ public final class MainActivity extends Activity {
               v -> startActivity(new Intent(this, CompareActivity.class).putExtra("id", j.id)));
           Ui.add(card, compare);
         }
+      }
+      if (!recent && j.item.video && j.state == JobState.SKIPPED && j.mode == 0) {
+        Button retry = Ui.button(this, "Try Max · keep original", false);
+        retry.setOnClickListener(v -> new AlertDialog.Builder(this)
+            .setTitle("Try Max on this video?")
+            .setMessage("Max allows some visible softening. Compact will keep the original beside any"
+                + " verified smaller copy; nothing will be moved to Trash. Compare both videos"
+                + " and check the sound before deciding what to keep.")
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton("Start Max", (dialog, which) -> {
+              db.enqueue(Collections.singletonList(j.item), 2,
+                  prefs.getBoolean("heic", true), false,
+                  prefs.getBoolean("charging", false));
+              service("resume");
+              show("progress");
+            })
+            .show());
+        Ui.add(card, retry);
       }
       if (j.state == JobState.ORIGINAL_TRASHED) {
         Button restore = Ui.button(this, "Restore original", false);

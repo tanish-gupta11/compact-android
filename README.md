@@ -54,6 +54,11 @@ identical. Real savings depend on your camera's files.
   They remain unchanged. Max may save space on those videos with some visible softening; inspect the copy before
   allowing the original into Trash. A real POCO F5 test saved 43% on one 1080p video in Smart, while another was
   skipped by Smart and saved 25% in Max.
+- Video sizes in Review are a **best-case bitrate estimate through an 85%-of-original ceiling, or skip**. The
+  encoder may need substantially more data to preserve detail than the optimistic estimate suggests. A fourth real
+  POCO clip was skipped in Smart even at an 85%-size test output; Max saved 32% on a private copy. For a Smart skip,
+  Report offers **Try Max · keep original**. This never Trashes the source; compare picture and sound before keeping
+  the result.
 
 ## Build and tests
 

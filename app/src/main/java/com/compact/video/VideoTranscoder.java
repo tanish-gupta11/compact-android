@@ -69,9 +69,10 @@ public final class VideoTranscoder {
     }
     if (last instanceof QualityFailure)
       throw new IOException(mode == 2
-          ? "Too much fine detail or motion: even Max saving would visibly change it. Original kept."
-          : "Fast motion or fine detail: a smaller copy would visibly lose detail. Original kept."
-              + " (Max saving may compress it with slight softening.)");
+          ? "Max could not pass its quality check at a useful size. " + last.getMessage()
+              + ". Original kept."
+          : "Smart could not preserve enough detail at a useful size. " + last.getMessage()
+              + ". Original kept. Max may save space with visible softening; try it only on a copy.");
     throw last;
   }
 
@@ -98,6 +99,13 @@ public final class VideoTranscoder {
   private static boolean encode(
       File src, File dst, VideoProbe p, int rate, boolean tryCq, int mode, Control control)
       throws Exception {
+    return encode(src, dst, p, rate, tryCq, mode, control, null);
+  }
+
+  /** Preferred codec is used by device diagnostics to compare the phone's hardware encoders. */
+  private static boolean encode(
+      File src, File dst, VideoProbe p, int rate, boolean tryCq, int mode, Control control,
+      String preferredCodec) throws Exception {
     MediaCodec encoder = null, decoder = null;
     Surface surface = null;
     MediaMuxer muxer = null;
@@ -123,7 +131,8 @@ public final class VideoTranscoder {
       String name = null;
       // The platform lists its preferred codec first (Codec2 before legacy OMX); take the first match.
       for (MediaCodecInfo info : new MediaCodecList(MediaCodecList.REGULAR_CODECS).getCodecInfos())
-        if (name == null && info.isEncoder() && info.isHardwareAccelerated())
+        if (name == null && info.isEncoder() && info.isHardwareAccelerated()
+            && (preferredCodec == null || preferredCodec.equals(info.getName())))
           for (String type : info.getSupportedTypes())
             if (type.equals("video/hevc")) {
               MediaCodecInfo.CodecCapabilities caps = info.getCapabilitiesForType(type);

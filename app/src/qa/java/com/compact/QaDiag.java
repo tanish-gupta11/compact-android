@@ -144,6 +144,10 @@ public final class QaDiag extends Instrumentation {
   }
 
   private void video(File f, File out) throws Exception {
+    if (f.getName().contains("_codec")) {
+      compareVideoEncoders(f, out);
+      return;
+    }
     if (f.getName().contains("_max")) {
       File engineDir = new File(out, f.getName() + ".engine");
       engineDir.mkdirs();
@@ -220,6 +224,69 @@ public final class QaDiag extends Instrumentation {
     } catch (Exception error) {
       say("  ENGINE Smart kept original: " + error.getMessage() + " "
           + (SystemClock.elapsedRealtime() - start) / 1000 + "s");
+    }
+  }
+
+  private void compareVideoEncoders(File source, File out) throws Exception {
+    VideoProbe p = VideoProbe.read(source);
+    say("codec comparison mime=" + p.mime + " format=" + p.format);
+    java.lang.reflect.Method encode = VideoTranscoder.class.getDeclaredMethod("encode", File.class,
+        File.class, VideoProbe.class, int.class, boolean.class, int.class,
+        VideoTranscoder.Control.class, String.class);
+    encode.setAccessible(true);
+    VideoTranscoder.Control none = new VideoTranscoder.Control() {
+      public void check() {}
+      public void progress(double fraction) {}
+    };
+    for (String codec : new String[] {"c2.qti.hevc.encoder", "OMX.qcom.video.encoder.hevc"}) {
+      for (double bpp : codec.startsWith("c2.") ? new double[] {.27, .34} : new double[] {.27}) {
+        File output = new File(out, "CompactTest_encoder_" + codec + "_" + bpp + ".mp4");
+        long start = SystemClock.elapsedRealtime();
+        try {
+          int rate = (int) Math.round(p.width * (double) p.height * p.fps * bpp);
+          encode.invoke(null, source, output, p, rate, false, 0, none, codec);
+          MediaMetadataRetriever original = new MediaMetadataRetriever();
+          MediaMetadataRetriever candidate = new MediaMetadataRetriever();
+          try {
+            original.setDataSource(source.getPath());
+            candidate.setDataSource(output.getPath());
+            int width = p.rotation == 90 || p.rotation == 270 ? p.height : p.width;
+            int height = p.rotation == 90 || p.rotation == 270 ? p.width : p.height;
+            double scale = Math.min(1, 1920d / Math.max(width, height));
+            width = Math.max(8, (int) (width * scale));
+            height = Math.max(8, (int) (height * scale));
+            double mean = 0, worst = 1, error = 0;
+            long pixels = 0;
+            for (double at : new double[] {.1, .3, .5, .7, .9}) {
+              Bitmap a = original.getScaledFrameAtTime((long) (p.duration * at),
+                  MediaMetadataRetriever.OPTION_CLOSEST, width, height);
+              Bitmap b = candidate.getScaledFrameAtTime((long) (p.duration * at),
+                  MediaMetadataRetriever.OPTION_CLOSEST, width, height);
+              if (a == null || b == null || a.getWidth() != b.getWidth()
+                  || a.getHeight() != b.getHeight()) throw new IOException("frame mismatch");
+              int[] ap = new int[a.getWidth() * a.getHeight()], bp = new int[ap.length];
+              a.getPixels(ap, 0, a.getWidth(), 0, 0, a.getWidth(), a.getHeight());
+              b.getPixels(bp, 0, b.getWidth(), 0, 0, b.getWidth(), b.getHeight());
+              Ssim.Result score = Ssim.measure(ap, bp, a.getWidth(), a.getHeight());
+              mean += score.ssim / 5;
+              worst = Math.min(worst, score.ssim);
+              error += score.squaredError;
+              pixels += score.pixels;
+              a.recycle();
+              b.recycle();
+            }
+            say(String.format(java.util.Locale.US,
+                "  %s bpp %.2f size %.0f%% mean %.4f worst %.4f PSNR %.1f in %ds",
+                codec, bpp, 100.0 * output.length() / source.length(), mean, worst,
+                Ssim.psnr(error, pixels), (SystemClock.elapsedRealtime() - start) / 1000));
+          } finally {
+            original.release();
+            candidate.release();
+          }
+        } catch (Exception failure) {
+          say("  " + codec + " bpp " + bpp + " ERROR " + failure);
+        }
+      }
     }
   }
 

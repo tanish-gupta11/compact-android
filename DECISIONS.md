@@ -43,3 +43,10 @@
 - Removed the aggregate-PSNR early stop. On a real 3.5-minute POCO camera video, PSNR rose only 0.5 dB between early attempts, but the next attempt passed Smart at 57% of the original size. The average cannot predict whether the worst sampled frame will pass.
 - Removed the pre-encode bitrate cutoff. Qualcomm VBR undershoots the requested bitrate; only the verified *actual* output size determines whether the 15% saving floor is met.
 - Max includes a 0.27 bpp attempt. A real fast-motion clip failed Max's worst-frame floor at 0.20 bpp but passed at 0.27 bpp with 25% savings. Smart quality rules remain unchanged.
+
+## 2026-10-03 — POCO F5 real-library expectations (1.0.2)
+
+- Smart keeps its verified image-quality thresholds. A fourth real 1080p AVC clip failed them even at 85% of source size, and the alternative Qualcomm encoder gave identical scores. Relaxing Smart merely to return an output would break the promised quality choice.
+- Max remains explicitly opt-in. Report offers a retry for Smart-skipped videos with `trash=false` forced, so users can compare any Max copy while the original stays untouched.
+- Review's bitrate-derived number is a best-case lower bound, not a likely final size. Videos display a range up to the 85% acceptance ceiling or “skip”; home and selection totals are labeled best-case. This preserves the required bitrate estimate without implying all videos can reach it.
+- Quality-gate skips now retain their measured SSIM/PSNR in Report instead of a generic “fast motion” explanation. No analytics or network permission are added.

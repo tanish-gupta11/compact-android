@@ -140,3 +140,20 @@ The previous PSNR-plateau early stop and target-bitrate cutoff could reject comp
 | 50 s real 1080p portrait fast-detail (private copy, 162,027,176 B) | Smart correctly skips; **Max output 121,661,445 B (75%)**, 25% saved | Smart at 0.27 bpp had mean/worst .958/.914, PSNR 37.3, so it fails Smart. Revised Max engine accepted its final 0.27 bpp attempt (mean .9583) after structural and audio checks, 82 s. Max can visibly soften detail. |
 
 Release 1.0.1: `tools/test.ps1` PASS (75 core assertions, 60 adversarial JPEG cases); signed APK verification PASS, 102,949 B, SHA-256 `F6C0371BDF2E7147E68322BCAECFD7AF7F1899F96A002EB53A129FBB99CFC928`; installed as versionCode 4 on the POCO. `logcat -b crash` showed no crash. After the owner unlocked the phone, a read-only scan showed 2,557 candidates and zero selected; the Review screen visibly rendered thumbnails beside video filenames. Compare's compressed-video-first playback is implemented but was not exercised through the on-screen UI because no personal video was published during testing. The owner should visually inspect any Max output before Trashing its original.
+
+## 2026-10-03 — Fourth owner video on POCO F5
+
+The owner reported another Smart skip on the installed 1.0.1 build and explicitly approved a temporary private QA copy. The Report showed a generic fine-detail warning. Source: 413,095,773 B, AVC 1920×1080, 24 fps, rotation 270°, 132 s. The copied source and unchanged camera original had the same SHA-256 (`e559b158…447a317bd01899`) before and after testing. No camera file was selected for compression, replaced, moved, or deleted.
+
+| Qualcomm HEVC encoder budget | Output as % of source | Mean / worst sampled-frame SSIM | PSNR |
+|---|---:|---:|---:|
+| Codec2 0.10 bpp | 25% | .899 / .894 | 36.1 dB |
+| Codec2 0.14 bpp | 35% | .913 / .907 | 37.0 dB |
+| Codec2 0.20 bpp | 50% | .926 / .923 | 37.8 dB |
+| Codec2 0.27 bpp | 68% | .938 / .933 | 38.9 dB |
+| Codec2 0.34 bpp | 85% | .946 / .940 | 39.7 dB |
+| Legacy OMX 0.27 bpp | 68% | .938 / .933 | 38.9 dB |
+
+The full Smart engine correctly kept the original after 141 s; even the extra 85%-size attempt failed Smart's .96/.95/40 gate, and the alternative encoder had no gain. This is not a codec crash or another early stop. The full Max engine passed at 278,897,353 B (68% of source; 32% saved) with mean SSIM .9384 after structural/audio checks, taking 172 s. At smaller sizes, a sampled frame visibly softened facial/fabric detail; Max should be used only with Keep originals and user comparison. The original remained hash-identical. The QA app, temporary device copy, and local diagnostic frames were removed; `logcat -b crash` was empty.
+
+Product correction: Review had shown ≈80 MB for this 394 MiB video using the 0.10-bpp best case. That was a poor prediction of quality-verified output. In 1.0.2, video estimates are displayed as a best-case-to-85% range **or skip**, quality failures include measured scores, and the Report offers an opt-in Max retry that always keeps the original. Host tests passed (75 core assertions, 60 adversarial JPEG cases); signed APK verification passed, SHA-256 `7F8ADBA46467C25D4DA932FD4F5945B8F19F431DF760B752A8A44C0419717899`. VersionCode 5 installed on the POCO without clearing app data. On-phone UI check: the Report showed **Try Max · keep original** for the Smart skip; its warning dialog explicitly said nothing would move to Trash, and was canceled without starting work. A read-only rescan showed 2,557 candidates, zero selected, and the fourth video's range `79.8–334.9 MB or skip`. No service or crash entry appeared. Max publishing, Gallery playback and comparison still need an owner-approved trial on a copy, not an original.
