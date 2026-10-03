@@ -17,6 +17,7 @@ import java.io.*;
  */
 public final class QaDiag extends Instrumentation {
   private final StringBuilder log = new StringBuilder();
+  private File transcript;
 
   public void onCreate(Bundle b) {
     super.onCreate(b);
@@ -26,12 +27,22 @@ public final class QaDiag extends Instrumentation {
   private void say(String s) {
     android.util.Log.i("CompactDiag", s);
     log.append(s).append('\n');
+    if (transcript != null) {
+      try (FileWriter writer = new FileWriter(transcript, true)) {
+        writer.write(s);
+        writer.write('\n');
+      } catch (IOException error) {
+        android.util.Log.e("CompactDiag", "Could not save QA log", error);
+      }
+    }
   }
 
   public void onStart() {
     File dir = new File(getTargetContext().getCacheDir(), "diag");
     File out = new File(dir, "out");
     out.mkdirs();
+    transcript = new File(out, "CompactTest_results.txt");
+    if (transcript.exists()) transcript.delete();
     File[] files = dir.listFiles();
     try {
       encoders();
@@ -133,20 +144,87 @@ public final class QaDiag extends Instrumentation {
   }
 
   private void video(File f, File out) throws Exception {
-    File dir = new File(out, f.getName() + ".engine");
-    dir.mkdirs();
-    long t0 = SystemClock.elapsedRealtime();
-    try {
-      VideoTranscoder.Result r = VideoTranscoder.compress(f, dir, 0, new VideoTranscoder.Control() {
-        public void check() {}
-
-        public void progress(double fraction) {}
-      });
-      say(String.format("%s %d -> %d (%.0f%%) ssim=%.4f %dms %s", f.getName(), f.length(), r.file.length(),
-          100.0 * r.file.length() / f.length(), r.score, SystemClock.elapsedRealtime() - t0, r.file.getName()));
-    } catch (Throwable e) {
-      say(f.getName() + " ENGINE FAILED " + e + " " + (SystemClock.elapsedRealtime() - t0) + "ms");
+    if (f.getName().contains("_max")) {
+      File engineDir = new File(out, f.getName() + ".engine");
+      engineDir.mkdirs();
+      long start = SystemClock.elapsedRealtime();
+      try {
+        VideoTranscoder.Result result = VideoTranscoder.compress(f, engineDir, 2,
+            new VideoTranscoder.Control() {
+              public void check() {}
+              public void progress(double fraction) {}
+            });
+        say(String.format(java.util.Locale.US, "  ENGINE Max %.0f%% mean=%.4f %ds",
+            100.0 * result.file.length() / f.length(), result.score,
+            (SystemClock.elapsedRealtime() - start) / 1000));
+      } catch (Exception error) {
+        say("  ENGINE Max kept original: " + error.getMessage() + " "
+            + (SystemClock.elapsedRealtime() - start) / 1000 + "s");
+      }
+      return;
     }
+    VideoProbe p = VideoProbe.read(f);
+    say(f.getName() + " " + p.width + "x" + p.height + " rot=" + p.rotation + " fps=" + p.fps + " br=" + p.bitrate);
+    java.lang.reflect.Method enc = VideoTranscoder.class.getDeclaredMethod("encode", File.class, File.class,
+        VideoProbe.class, int.class, boolean.class, int.class, VideoTranscoder.Control.class);
+    enc.setAccessible(true);
+    VideoTranscoder.Control none = new VideoTranscoder.Control() {
+      public void check() {}
+
+      public void progress(double x) {}
+    };
+    for (double bpp : new double[] {.10, .14, .20, .27}) {
+      File o = new File(out, f.getName() + ".ladder." + bpp + ".mp4");
+      long rate = Math.round(p.width * (double) p.height * p.fps * bpp);
+      long t0 = SystemClock.elapsedRealtime();
+      if (!o.isFile()) enc.invoke(null, f, o, p, (int) rate, false, 0, none);
+      long encMs = SystemClock.elapsedRealtime() - t0;
+      MediaMetadataRetriever x = new MediaMetadataRetriever(), y = new MediaMetadataRetriever();
+      x.setDataSource(f.getPath());
+      y.setDataSource(o.getPath());
+      int w = p.width, h = p.height;
+      if (p.rotation == 90 || p.rotation == 270) { w = p.height; h = p.width; }
+      double sc = Math.min(1, 1920d / Math.max(w, h));
+      w = (int) (w * sc); h = (int) (h * sc);
+      StringBuilder per = new StringBuilder();
+      double sum = 0, worst = 1, se = 0; long px = 0;
+      for (double t : new double[] {.1, .3, .5, .7, .9}) {
+        long at = (long) (p.duration * t);
+        Bitmap aa = x.getScaledFrameAtTime(at, MediaMetadataRetriever.OPTION_CLOSEST, w, h);
+        Bitmap bb = y.getScaledFrameAtTime(at, MediaMetadataRetriever.OPTION_CLOSEST, w, h);
+        int ww = aa.getWidth(), hh = aa.getHeight();
+        int[] ap = new int[ww * hh], bp = new int[ap.length];
+        aa.getPixels(ap, 0, ww, 0, 0, ww, hh);
+        bb.getPixels(bp, 0, ww, 0, 0, ww, hh);
+        Ssim.Result r = Ssim.measure(ap, bp, ww, hh);
+        per.append(String.format(" %.3f/%.1f", r.ssim, r.psnr()));
+        sum += r.ssim; worst = Math.min(worst, r.ssim); se += r.squaredError; px += r.pixels;
+        if (t == .5) {
+          try (FileOutputStream os = new FileOutputStream(o.getPath() + ".mid.out.png")) { bb.compress(Bitmap.CompressFormat.PNG, 100, os); }
+          if (bpp == .10) try (FileOutputStream os = new FileOutputStream(new File(out, "mid.src.png"))) { aa.compress(Bitmap.CompressFormat.PNG, 100, os); }
+        }
+        aa.recycle(); bb.recycle();
+      }
+      x.release(); y.release();
+      say(String.format("  bpp %.2f %.0f%% enc=%ds mean=%.3f worst=%.3f psnr=%.1f |%s", bpp, 100.0 * o.length() / f.length(),
+          encMs / 1000, sum / 5, worst, Ssim.psnr(se, px), per));
+    }
+    File engineDir = new File(out, f.getName() + ".engine");
+    engineDir.mkdirs();
+    long start = SystemClock.elapsedRealtime();
+    try {
+      VideoTranscoder.Result result = VideoTranscoder.compress(f, engineDir, 0, none);
+      say(String.format(java.util.Locale.US, "  ENGINE Smart %.0f%% mean=%.4f %ds",
+          100.0 * result.file.length() / f.length(), result.score,
+          (SystemClock.elapsedRealtime() - start) / 1000));
+    } catch (Exception error) {
+      say("  ENGINE Smart kept original: " + error.getMessage() + " "
+          + (SystemClock.elapsedRealtime() - start) / 1000 + "s");
+    }
+  }
+
+  private static double luma(int v) {
+    return .299 * ((v >> 16) & 255) + .587 * ((v >> 8) & 255) + .114 * (v & 255);
   }
 
   private String frames(File a, File b, VideoProbe p, int cap) throws Exception {

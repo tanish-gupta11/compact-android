@@ -110,3 +110,33 @@ automatically after reset); rescan excludes compressed originals; no entries in 
 
 Not verified: POCO F5 (Qualcomm) HEIC quality behaviour and 4K/60 fps encoding; thermal pause; Android 6-hour service
 limit; libraries with thousands of files.
+
+## 2026-10-03 — POCO F5 (Android 15, HyperOS 3, Snapdragon 7+ Gen 2) over wireless debugging
+
+Encoders: `c2.qti.hevc.encoder` (VBR only, up to 4096 px, 1080p60 and 4K30 supported; CQ variant limited to 512 px)
+and `c2.qti.heic.encoder` (CQ, quality honoured).
+
+- **Photos:** HEIC works. Generated 12 MP JPEGs: rotated (orientation 6/8) → HEIC at 13–17% of original size,
+  PSNR ≈ 46 dB, rotation verified via the decoder (750x1000). A 4:2:0 landscape photo → JPEG at 66%.
+- **Encoder selection bug fixed:** the last matching codec (legacy OMX) was chosen; now the first (Codex2) is used.
+- **Owner's real video (1080p portrait, 25.5 Mbps, fast handheld motion over textured ground):** the 0.2/1.0 engine
+  skipped it (PSNR 34.9 dB). Diagnosis on a private copy: alignment correct (±3 frame search), no brightness/colour
+  shift; detail genuinely lost in fast-motion frames. Bitrate sweep: 43% size → worst frame SSIM 0.857; 61% → 0.900
+  (visible smearing at 2x zoom); 75% → 0.914; 85% → 0.914 (saturated). B-frames: no gain (reverted).
+  Conclusion: correct refusal. Changes: Smart ladder extended to 0.10/0.14/0.20/0.27 bpp, early stop when PSNR improves
+  < 0.7 dB between attempts, and a plain-language reason ("Fast motion or fine detail: a smaller copy would visibly
+  lose detail. Original kept."). Re-run on the copy: kept original after 68 s.
+- Encoding speed on POCO: ~10 s for a 50 s 1080p clip per attempt.
+- Owner's original verified unchanged (SHA-256 before/after); private copy removed with the QA app.
+
+## 2026-10-03 — POCO F5 regression investigation and 1.0.1
+
+The previous PSNR-plateau early stop and target-bitrate cutoff could reject compressible videos. Diagnosis used the owner's explicit permission for two temporary QA copies; no camera original was selected for compression, moved, or modified. The original SHA-256 fingerprints matched before and after. All temporary phone copies and the QA app were removed after testing.
+
+| POCO F5 fixture | Smart/Max result | Evidence |
+|---|---|---|
+| Generated 8 s 1080p30 AVC motion clip | Smart output 30% of source size | Mean SSIM .995, worst .994, PSNR 45.6 dB; full engine pass |
+| 3.5 min real 1080p landscape (private copy, 519,692,609 B) | **Smart output 298,034,461 B (57%)**, 43% saved | VBR 0.10: mean/worst .969/.948, PSNR 38.5; 0.14: .971/.952, 39.0; **0.20: .976/.962, 40.2**. Full engine accepted the 0.20 attempt after video timing, audio digest, rotation and duration checks, 130 s. Old code incorrectly stopped after the 0.14 attempt because aggregate PSNR improvement was only 0.5 dB. |
+| 50 s real 1080p portrait fast-detail (private copy, 162,027,176 B) | Smart correctly skips; **Max output 121,661,445 B (75%)**, 25% saved | Smart at 0.27 bpp had mean/worst .958/.914, PSNR 37.3, so it fails Smart. Revised Max engine accepted its final 0.27 bpp attempt (mean .9583) after structural and audio checks, 82 s. Max can visibly soften detail. |
+
+Release 1.0.1: `tools/test.ps1` PASS (75 core assertions, 60 adversarial JPEG cases); signed APK verification PASS, 102,949 B, SHA-256 `F6C0371BDF2E7147E68322BCAECFD7AF7F1899F96A002EB53A129FBB99CFC928`; installed as versionCode 4 on the POCO. `logcat -b crash` showed no crash. The on-screen review-thumbnail and Compare playback changes still require an unlocked-phone check; the phone locked during that step. The owner should visually inspect any Max output before Trashing its original.

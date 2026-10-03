@@ -22,6 +22,7 @@ public final class MainActivity extends Activity {
   private JobQueue db;
   private SharedPreferences prefs;
   private final ExecutorService io = Executors.newSingleThreadExecutor();
+  private final ExecutorService thumbnails = Executors.newFixedThreadPool(2);
   private final Handler handler = new Handler();
   private List<MediaItem> scanned = new ArrayList<>(), visible = new ArrayList<>();
   private final Set<String> selected = new HashSet<>();
@@ -98,6 +99,7 @@ public final class MainActivity extends Activity {
     if (pendingDialog != null) pendingDialog.dismiss();
     io.execute(db::close);
     io.shutdown();
+    thumbnails.shutdownNow();
     super.onDestroy();
   }
 
@@ -401,9 +403,36 @@ public final class MainActivity extends Activity {
 
           public View getView(int n, View old, android.view.ViewGroup group) {
             MediaItem m = visible.get(n);
-            CheckBox row = new CheckBox(MainActivity.this);
-            row.setTextColor(Ui.TEXT);
-            row.setText(
+            LinearLayout row = new LinearLayout(MainActivity.this);
+            row.setOrientation(LinearLayout.HORIZONTAL);
+            row.setGravity(android.view.Gravity.CENTER_VERTICAL);
+            ImageView thumb = new ImageView(MainActivity.this);
+            thumb.setScaleType(ImageView.ScaleType.CENTER_CROP);
+            thumb.setContentDescription("Preview " + m.name);
+            thumb.setTag(m.uri);
+            thumb.setOnClickListener(v -> {
+              Intent view = new Intent(Intent.ACTION_VIEW);
+              view.setDataAndType(m.uri, m.mime);
+              view.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+              try { startActivity(view); }
+              catch (android.content.ActivityNotFoundException error) {
+                message("No viewer is available for this file.");
+              }
+            });
+            row.addView(thumb, new LinearLayout.LayoutParams(Ui.dp(MainActivity.this, 76), Ui.dp(MainActivity.this, 76)));
+            thumbnails.execute(() -> {
+              try {
+                android.graphics.Bitmap bitmap = getContentResolver().loadThumbnail(m.uri,
+                    new android.util.Size(152, 152), null);
+                runOnUiThread(() -> {
+                  if (!isDestroyed() && m.uri.equals(thumb.getTag())) thumb.setImageBitmap(bitmap);
+                  else bitmap.recycle();
+                });
+              } catch (Exception ignored) { }
+            });
+            CheckBox choice = new CheckBox(MainActivity.this);
+            choice.setTextColor(Ui.TEXT);
+            choice.setText(
                 m.name
                     + "\n"
                     + (m.video ? "VIDEO" : "PHOTO")
@@ -411,14 +440,16 @@ public final class MainActivity extends Activity {
                     + Ui.size(m.size)
                     + " → ≈ "
                     + Ui.size(estimate(m)));
-            row.setPadding(8, 16, 8, 16);
-            row.setChecked(selected.contains(m.uri.toString()));
-            row.setOnCheckedChangeListener(
+            choice.setPadding(8, 16, 8, 16);
+            choice.setChecked(selected.contains(m.uri.toString()));
+            choice.setOnCheckedChangeListener(
                 (button, on) -> {
                   if (on) selected.add(m.uri.toString());
                   else selected.remove(m.uri.toString());
                   refresh.run();
                 });
+            row.addView(choice, new LinearLayout.LayoutParams(0, -2, 1));
+            row.setOnClickListener(v -> choice.setChecked(!choice.isChecked()));
             return row;
           }
         });

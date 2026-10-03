@@ -33,6 +33,8 @@ identical. Real savings depend on your camera's files.
    **Keep originals alongside compressed copies**. Allow location-metadata access so GPS is kept.
 5. When it finishes, open **Reports** → **Compare** a few results. Check them in the Gallery too: sharpness, colours,
    rotation, date/order, location, video sound and sync.
+   Review shows thumbnails; tap one to preview the source before selecting it. For a successful video, Compare plays
+   the compressed copy first and can switch to the original at the same position.
 6. Note in the report whether photos came out as `image/heic` (HEIC works on this phone) or JPEG.
 7. Then try the default mode on a few disposable copies: **Review & approve Trash**, check the Gallery, open
    **Recently replaced**, **Restore original** on one, and use **Free up space now** on the rest.
@@ -48,6 +50,10 @@ identical. Real savings depend on your camera's files.
   too little. The report says why for each file.
 - Photos larger than the phone's memory allows (for example some 50+ MP shots) get Lossless repacking only.
 - Copies already in Google Photos, Mi Cloud or other backups are not touched.
+- Some fast-motion or finely textured camera videos cannot meet Smart's quality check even after several retries.
+  They remain unchanged. Max may save space on those videos with some visible softening; inspect the copy before
+  allowing the original into Trash. A real POCO F5 test saved 43% on one 1080p video in Smart, while another was
+  skipped by Smart and saved 25% in Max.
 
 ## Build and tests
 

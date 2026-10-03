@@ -20,25 +20,34 @@ public final class VideoTranscoder {
     public double score;
   }
 
+  /** A copy that did not look the same as the original; carries its scores for the retry logic. */
+  static final class QualityFailure extends IOException {
+    final double psnr, worst;
+
+    QualityFailure(String message, double psnr, double worst) {
+      super(message);
+      this.psnr = psnr;
+      this.worst = worst;
+    }
+  }
+
   public static Result compress(File source, File dir, int mode, Control control) throws Exception {
     VideoProbe p = VideoProbe.read(source);
-    if (mode == 1) throw new IOException("Lossless mode skips videos");
+    if (mode == 1) throw new IOException("Lossless mode keeps videos unchanged");
     String encoderProblem = encoderProblem(p);
     if (encoderProblem != null) throw new IOException(encoderProblem);
-    // Attempts: constant-quality first (smallest when the chip supports it), then VBR at a
-    // bits-per-pixel budget, then a higher budget. Every attempt must pass the quality gate.
-    double[] bpp = mode == 2 ? new double[] {.065, .065, .10} : new double[] {.10, .10, .14};
+    // Ladder: constant quality first when the chip supports it, then rising bits-per-pixel budgets.
+    // Busy, fast-moving footage needs more bits; calm footage passes early and saves the most.
+    double[] bpp = mode == 2 ? new double[] {.065, .065, .10, .14, .20, .27} : new double[] {.10, .10, .14, .20, .27};
     Exception last = null;
     boolean usedCq = false;
-    for (int attempt = 0; attempt < 3; attempt++) {
+    for (int attempt = 0; attempt < bpp.length; attempt++) {
       // Without constant-quality support, the first two attempts would be identical VBR encodes.
       if (attempt == 1 && !usedCq) continue;
       File out = new File(dir, "video" + attempt + ".mp4");
       long rate = Math.round(p.width * (double) p.height * p.fps * bpp[attempt]);
-      if (attempt > 0 && rate > p.bitrate * .85) {
-        if (last == null) last = new IOException("Already compact: re-encoding would save under 15%");
-        break;
-      }
+      // A VBR target is only a budget, not the resulting file size. The hardware encoder can
+      // undershoot it substantially, so let verification enforce the actual 15% saving floor.
       try {
         usedCq = encode(source, out, p, (int) Math.min(Integer.MAX_VALUE, rate), attempt == 0, mode, control);
         Mp4TimePatcher.copy(source, out);
@@ -47,12 +56,22 @@ public final class VideoTranscoder {
         r.file = out;
         r.score = score;
         return r;
+      } catch (QualityFailure q) {
+        last = q;
+        com.compact.util.Files.discard(out);
+        control.check();
+        // A plateau in aggregate PSNR does not prove that the worst frame cannot improve.
       } catch (Exception e) {
         last = e;
         com.compact.util.Files.discard(out);
         control.check();
       }
     }
+    if (last instanceof QualityFailure)
+      throw new IOException(mode == 2
+          ? "Too much fine detail or motion: even Max saving would visibly change it. Original kept."
+          : "Fast motion or fine detail: a smaller copy would visibly lose detail. Original kept."
+              + " (Max saving may compress it with slight softening.)");
     throw last;
   }
 
@@ -102,8 +121,9 @@ public final class VideoTranscoder {
             MediaFormat.KEY_COLOR_TRANSFER
           }) if (p.format.containsKey(key)) format.setInteger(key, p.format.getInteger(key));
       String name = null;
-      for (MediaCodecInfo info : new MediaCodecList(MediaCodecList.ALL_CODECS).getCodecInfos())
-        if (info.isEncoder() && info.isHardwareAccelerated())
+      // The platform lists its preferred codec first (Codec2 before legacy OMX); take the first match.
+      for (MediaCodecInfo info : new MediaCodecList(MediaCodecList.REGULAR_CODECS).getCodecInfos())
+        if (name == null && info.isEncoder() && info.isHardwareAccelerated())
           for (String type : info.getSupportedTypes())
             if (type.equals("video/hevc")) {
               MediaCodecInfo.CodecCapabilities caps = info.getCapabilitiesForType(type);
@@ -342,7 +362,7 @@ public final class VideoTranscoder {
     }
     double mean = sum / samples, psnr = Ssim.psnr(squaredError, pixels);
     if (!com.compact.quality.QualityGate.passVideo(mode, mean, min, psnr))
-      throw new IOException("Quality check failed: " + com.compact.quality.QualityGate.describe(mean, min, psnr));
+      throw new QualityFailure("Quality check failed: " + com.compact.quality.QualityGate.describe(mean, min, psnr), psnr, min);
     if (dst.length() > src.length() * .85)
       throw new IOException("Verified video saves less than 15%");
     return mean;

@@ -37,3 +37,9 @@
 - Videos: CQ first, then VBR 0.10 and 0.14 bits/pixel (Smart). Skip only when a re-encode cannot save 15%.
 - Videos are read in place when byte-identical to the original; photos keep a private snapshot (GPS-unredacted read).
 - Added permanent "Free up space now" for trashed originals, because Trash does not free storage for ~30 days.
+
+## 2026-10-03 — POCO F5 video retry correction (1.0.1)
+
+- Removed the aggregate-PSNR early stop. On a real 3.5-minute POCO camera video, PSNR rose only 0.5 dB between early attempts, but the next attempt passed Smart at 57% of the original size. The average cannot predict whether the worst sampled frame will pass.
+- Removed the pre-encode bitrate cutoff. Qualcomm VBR undershoots the requested bitrate; only the verified *actual* output size determines whether the 15% saving floor is met.
+- Max includes a 0.27 bpp attempt. A real fast-motion clip failed Max's worst-frame floor at 0.20 bpp but passed at 0.27 bpp with 25% savings. Smart quality rules remain unchanged.

@@ -31,8 +31,8 @@ public final class CompareActivity extends Activity {
     }
     if (b != null) {
       position = b.getInt("position");
-      showingOutput = b.getBoolean("output");
-    }
+      showingOutput = b.getBoolean("output", true);
+    } else showingOutput = true;
     LinearLayout root = Ui.column(this);
     root.setBackgroundColor(Ui.BG);
     Ui.edge(this, root, 16);
@@ -56,11 +56,12 @@ public final class CompareActivity extends Activity {
       MediaController controller = new MediaController(this);
       controller.setAnchorView(video);
       video.setMediaController(controller);
-      Button toggle = Ui.button(this, "Switch original / compressed", true);
+      Button toggle = Ui.button(this, "Switch to original video", true);
       toggle.setOnClickListener(
           v -> {
             position = video.getCurrentPosition();
             showingOutput = !showingOutput;
+            toggle.setText(showingOutput ? "Switch to original video" : "Switch to compressed video");
             play();
           });
       Ui.add(root, toggle);
