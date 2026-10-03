@@ -1,4 +1,4 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.compact" android:versionCode="6" android:versionName="1.0.3">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.compact" android:versionCode="7" android:versionName="1.0.4">
     <uses-sdk android:minSdkVersion="30" android:targetSdkVersion="35" />
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
@@ -11,10 +11,20 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.ACCESS_MEDIA_LOCATION" />
     <application android:label="Compact" android:icon="@drawable/ic_compact" android:theme="@style/AppTheme" android:largeHeap="true" android:allowBackup="false" android:fullBackupContent="false" android:usesCleartextTraffic="false">
-        <activity android:name="com.compact.MainActivity" android:exported="true" android:screenOrientation="unspecified">
+        <activity android:name="com.compact.MainActivity" android:exported="true" android:screenOrientation="unspecified" android:launchMode="singleTop">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="video/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="video/*" />
             </intent-filter>
         </activity>
         <activity android:name="com.compact.CompareActivity" android:exported="false" />

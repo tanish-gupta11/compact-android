@@ -29,6 +29,25 @@ public final class QaChecks extends Instrumentation {
       Context c = getTargetContext();
       if (!c.getPackageName().equals("com.compact.qa"))
         throw new SecurityException("QA package only");
+      android.net.Uri sharedA = android.net.Uri.parse("content://media/external_primary/video/media/100");
+      android.net.Uri sharedB = android.net.Uri.parse("content://media/external_primary/video/media/101");
+      Intent single = new Intent(Intent.ACTION_SEND).setType("video/mp4")
+          .putExtra(Intent.EXTRA_STREAM, sharedA);
+      if (!SharedVideos.streams(single).equals(Collections.singletonList(sharedA)))
+        throw new AssertionError("Single video share");
+      Intent multiple = new Intent(Intent.ACTION_SEND_MULTIPLE).setType("video/*")
+          .putParcelableArrayListExtra(Intent.EXTRA_STREAM,
+              new ArrayList<>(Arrays.asList(sharedA, sharedA, sharedB)));
+      if (SharedVideos.streams(multiple).size() != 2) throw new AssertionError("Share deduplication");
+      Intent clipOnly = new Intent(Intent.ACTION_SEND).setType("video/mp4");
+      clipOnly.setClipData(ClipData.newRawUri("video", sharedA));
+      if (SharedVideos.streams(clipOnly).size() != 1) throw new AssertionError("ClipData share");
+      boolean badShareRejected = false;
+      try { SharedVideos.streams(new Intent(Intent.ACTION_SEND)
+          .putExtra(Intent.EXTRA_STREAM, android.net.Uri.parse("file:///private/test.mp4"))); }
+      catch (IOException expected) { badShareRejected = true; }
+      if (!badShareRejected) throw new AssertionError("Unsafe file share accepted");
+      log.append("SHARE single/multiple/dedup/ClipData/file rejection PASS\n");
       dir = new File(c.getCacheDir(), "CompactTest_native_" + System.currentTimeMillis());
       if (!dir.mkdirs()) throw new IOException("No test directory");
       File src = new File(dir, "CompactTest_source.jpg");

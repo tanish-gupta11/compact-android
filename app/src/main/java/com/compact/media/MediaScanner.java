@@ -87,7 +87,7 @@ public final class MediaScanner {
     }
   }
 
-  private static void probeEstimate(Context c, MediaItem m) {
+  static void probeEstimate(Context c, MediaItem m) {
     android.media.MediaExtractor e = new android.media.MediaExtractor();
     try {
       e.setDataSource(c, m.uri, null);

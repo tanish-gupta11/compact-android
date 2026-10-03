@@ -37,7 +37,9 @@ public final class Replacer {
         job.item.video
             ? MediaStore.Video.Media.getContentUri(MediaStore.getVolumeName(job.item.uri))
             : MediaStore.Images.Media.getContentUri(MediaStore.getVolumeName(job.item.uri));
-    Uri uri = c.getContentResolver().insert(collection, v);
+    Bundle related = new Bundle();
+    related.putParcelable(MediaStore.QUERY_ARG_RELATED_URI, job.item.uri);
+    Uri uri = c.getContentResolver().insert(collection, v, related);
     if (uri == null) throw new IOException("Could not create Gallery copy");
     journal = new ContentValues();
     journal.put("output_uri", uri.toString());

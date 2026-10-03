@@ -29,7 +29,11 @@ public final class MainActivity extends Activity {
   private int typeFilter, sizeFilter, dateFilter;
   private boolean busy, shownRunning;
   private String scanError;
+  private final ArrayList<Uri> pendingShares = new ArrayList<>();
+  private Set<String> restoredShareSelection;
+  private boolean sharedReview;
   private ProgressDialog pendingDialog;
+  private AlertDialog compressionOptions;
   private static final long SESSION_START = System.currentTimeMillis();
   private double photoRatio = -1, videoRatio = -1;
   private final Runnable ticker =
@@ -69,6 +73,79 @@ public final class MainActivity extends Activity {
             runOnUiThread(() -> show(page));
           });
     }
+    if (state != null && state.containsKey("sharedReviewUris")) {
+      ArrayList<String> uris = state.getStringArrayList("sharedReviewUris");
+      if (uris != null) for (String uri : uris) pendingShares.add(Uri.parse(uri));
+      ArrayList<String> chosen = state.getStringArrayList("sharedSelectedUris");
+      restoredShareSelection = chosen == null ? null : new HashSet<>(chosen);
+      if (!busy) importSharedVideos();
+    } else receiveShare(getIntent());
+  }
+
+  protected void onNewIntent(Intent intent) {
+    super.onNewIntent(intent);
+    setIntent(intent);
+    receiveShare(intent);
+  }
+
+  private void receiveShare(Intent intent) {
+    try {
+      ArrayList<Uri> uris = SharedVideos.streams(intent);
+      if (!uris.isEmpty() && compressionOptions != null) {
+        compressionOptions.dismiss();
+        compressionOptions = null;
+      }
+      if (pendingShares.size() + uris.size() > 100)
+        throw new java.io.IOException("Share up to 100 videos at a time.");
+      for (Uri uri : uris) if (!pendingShares.contains(uri)) pendingShares.add(uri);
+      if (!busy) importSharedVideos();
+    } catch (Exception e) { message(e.getMessage()); }
+  }
+
+  private void importSharedVideos() {
+    if (busy || pendingShares.isEmpty()) return;
+    boolean access = Build.VERSION.SDK_INT >= 33
+        ? checkSelfPermission(Manifest.permission.READ_MEDIA_VIDEO) == PackageManager.PERMISSION_GRANTED
+        : checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED;
+    if (!access) {
+      requestPermissions(new String[] {Build.VERSION.SDK_INT >= 33
+          ? Manifest.permission.READ_MEDIA_VIDEO : Manifest.permission.READ_EXTERNAL_STORAGE}, 43);
+      return;
+    }
+    ArrayList<Uri> incoming = new ArrayList<>(pendingShares);
+    pendingShares.clear();
+    Set<String> restored = restoredShareSelection;
+    restoredShareSelection = null;
+    task("Reading shared videos…", () -> {
+      List<MediaItem> items = new ArrayList<>();
+      Set<String> found = new HashSet<>();
+      StringBuilder errors = new StringBuilder();
+      for (Uri uri : incoming) {
+        try {
+          MediaItem item = SharedVideos.resolve(this, uri);
+          if (found.add(item.uri.toString())) items.add(item);
+        } catch (Exception e) {
+          if (errors.length() < 1200) errors.append(e.getMessage() == null
+              ? "Could not read a shared video." : e.getMessage()).append("\n");
+        }
+      }
+      runOnUiThread(() -> {
+        if (isDestroyed()) return;
+        setIntent(new Intent(Intent.ACTION_MAIN));
+        if (!items.isEmpty()) {
+          scanned = items;
+          selected.clear();
+          for (MediaItem item : items)
+            if (restored == null || restored.contains(item.uri.toString()))
+              selected.add(item.uri.toString());
+          typeFilter = sizeFilter = dateFilter = 0;
+          sharedReview = true;
+          scanError = null;
+          show("review");
+        }
+        if (errors.length() > 0) message(errors.toString().trim());
+      });
+    });
   }
 
   protected void onResume() {
@@ -105,6 +182,16 @@ public final class MainActivity extends Activity {
 
   protected void onSaveInstanceState(Bundle b) {
     b.putString("page", page);
+    if (sharedReview && "review".equals(page)) {
+      ArrayList<String> uris = new ArrayList<>();
+      for (MediaItem item : scanned) uris.add(item.uri.toString());
+      b.putStringArrayList("sharedReviewUris", uris);
+      b.putStringArrayList("sharedSelectedUris", new ArrayList<>(selected));
+    } else if (!pendingShares.isEmpty()) {
+      ArrayList<String> uris = new ArrayList<>();
+      for (Uri uri : pendingShares) uris.add(uri.toString());
+      b.putStringArrayList("sharedReviewUris", uris);
+    }
     super.onSaveInstanceState(b);
   }
 
@@ -260,6 +347,16 @@ public final class MainActivity extends Activity {
                 + " access does not include your whole camera folder.";
         show("home");
       }
+    } else if (code == 43) {
+      boolean access = Build.VERSION.SDK_INT >= 33
+          ? checkSelfPermission(Manifest.permission.READ_MEDIA_VIDEO) == PackageManager.PERMISSION_GRANTED
+          : checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED;
+      if (access) importSharedVideos();
+      else {
+        pendingShares.clear();
+        message("Allow video access so Compact can locate the local original and continue "
+            + "compression in the background. Share it again after granting access in Permissions.");
+      }
     } else if (code == 41) {
       if (checkSelfPermission(Manifest.permission.ACCESS_MEDIA_LOCATION)
           == PackageManager.PERMISSION_GRANTED) options();
@@ -290,6 +387,7 @@ public final class MainActivity extends Activity {
           runOnUiThread(
               () -> {
                 scanned = items;
+                sharedReview = false;
                 selected.clear();
                 scanError = null;
                 show("review");
@@ -307,6 +405,7 @@ public final class MainActivity extends Activity {
   }
 
   private void review() {
+    if (sharedReview) label("Videos shared from Gallery · review your selection, then choose compression options.");
     label(
         "Choose files to compress. Sizes with ≈ are estimates; files that fail verification are"
             + " kept.");
@@ -521,7 +620,7 @@ public final class MainActivity extends Activity {
                 + " guarantee invisible changes.",
             14,
             Ui.MUTED));
-    new AlertDialog.Builder(this)
+    compressionOptions = new AlertDialog.Builder(this)
         .setTitle("Compress " + selected.size() + (selected.size() == 1 ? " file" : " files"))
         .setView(content)
         .setNegativeButton("Cancel", null)
@@ -550,7 +649,8 @@ public final class MainActivity extends Activity {
               service("resume");
               show("progress");
             })
-        .show();
+        .create();
+    compressionOptions.show();
   }
 
   private void service(String command) {
@@ -914,7 +1014,7 @@ public final class MainActivity extends Activity {
   }
 
   private void settings() {
-    label("Compact 1.0.3 · offline · no accounts · no advertising");
+    label("Compact 1.0.4 · offline · no accounts · no advertising");
     Spinner defaultMode =
         spinner(
             new String[] {"Default: Smart", "Default: Lossless photos", "Default: Max saving"},
@@ -1049,6 +1149,7 @@ public final class MainActivity extends Activity {
                 () -> {
                   busy = false;
                   if (!isDestroyed()) dialog.dismiss();
+                  if (!isDestroyed() && !pendingShares.isEmpty()) importSharedVideos();
                 });
           }
         });

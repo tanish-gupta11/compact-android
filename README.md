@@ -4,7 +4,7 @@ Compact is an offline Android app that makes smaller camera-photo and video copi
 automated checks reject many degraded results, but cannot guarantee every scene looks the same to you. Never
 permanently delete an irreplaceable original without checking the copy and keeping a separate backup.
 
-**Version 1.0.3**: device-tested on a Samsung SM-X115 and POCO F5 with generated `CompactTest_*` media; see
+**Version 1.0.4** adds Gallery sharing. Earlier compression versions were device-tested on a Samsung SM-X115 and POCO F5 with generated `CompactTest_*` media; see
 `TEST_REPORT.md` for passes and remaining limitations. Real POCO videos showed that Smart may correctly skip
 difficult footage and Max may visibly soften detail.
 
@@ -33,6 +33,12 @@ already-HEVC video 64%; 12 MP photos 53–58% smaller (4:4:4 JPEG) or 16–20% (
 identical. Real savings depend on your camera's files.
 
 ## Install and test on the POCO F5
+
+To compress a video you find in Gallery, tap **Share → Compact**. You can share one video or select several first.
+Compact opens those local videos selected in Review, including files outside Camera. Review the list, tap Compress,
+choose your mode and after-action, then tap Start. It may ask for video access so queued work can continue in the
+background. Compact does not start compression just because a video was shared. Cloud-only or ambiguous shares
+that cannot be matched to a local original are explained rather than added to the queue.
 
 1. Copy `releases/compact.apk` to the phone and install it (Android 11+). Keep a separate backup of anything precious.
 2. Start with copies: a few videos (1080p and 4K, one portrait) and about 10 photos.

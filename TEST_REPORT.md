@@ -197,3 +197,23 @@ it still reports versionName `1.0.3`, versionCode `6`. Inspection of **that APK'
 permission verification and had SHA-256 `34A9E307B7B6807C1F838BFE1A2B828977CD62E0DCA9427AE8B415E2C25E7F21`.
 Host tests: 78 core assertions and 60 adversarial JPEG cases passed. No device was connected during this audit;
 the owner's reported 17:43 install and actual scrolling on-device could not be independently confirmed.
+
+## 2026-10-03 — 1.0.4 receive videos from Gallery
+
+Added Android `ACTION_SEND` and `ACTION_SEND_MULTIPLE` Share targets for `video/*`. Shared local videos are resolved
+to specific external MediaStore video items, deduplicated, and opened selected in Review without auto-enqueueing.
+Metadata and the source folder come from the local original. Temporary OEM provider streams require a unique
+local name/size match with identical bytes; unavailable/cloud-only/ambiguous items are reported. Non-content URIs,
+collection URIs, photos disguised as videos, pending/trashed media, existing Compact results and queued originals
+are rejected. Video read access is required so jobs do not rely on a Gallery activity's temporary grant.
+Added warm-launch handling, deferred shares while an app task is busy, and saved shared selection on recreation.
+Publication includes MediaStore's related-original hint for videos shared from folders outside Camera.
+
+Release and QA sources compiled; the signed release APK passed signature/offline-permission/package isolation
+checks. The packaged manifest contains both SEND filters, `video/*`, `singleTop`, versionName `1.0.4`, versionCode
+`7`. Desktop tests passed 78 assertions + 60 adversarial JPEG cases. APK: 111,141 B; SHA-256
+`A20486F12791E1FAB252FA7A9C1444C84D9361B0320FC2A15F498CC7014F1200`.
+QA share-intent assertions were added for single/multiple streams, deduplication, ClipData and file-URI rejection.
+**Device runtime tests are pending**: ADB had no connected device. These new assertions and Gallery's actual Share
+sheet, OEM-provider matching, rotation/permission return and background compression of shared videos were not run
+on a device in this turn. Previous compression tests do not prove this new receiving flow works on every Gallery.
