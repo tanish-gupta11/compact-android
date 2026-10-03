@@ -1,0 +1,7 @@
+<resources>
+    <color name="compact_bg">#111318</color>
+    <color name="compact_surface">#1B1F27</color>
+    <color name="compact_text">#F4F6FA</color>
+    <color name="compact_muted">#AAB2C0</color>
+    <color name="compact_accent">#8BD3FF</color>
+</resources>

@@ -1,0 +1,7 @@
+build/
+signing/
+releases/
+*.class
+*.apk
+test-media/
+

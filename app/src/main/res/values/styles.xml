@@ -1,0 +1,11 @@
+<resources>
+    <style name="AppTheme" parent="android:style/Theme.Material.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:colorAccent">@color/compact_accent</item>
+        <item name="android:navigationBarColor">@color/compact_bg</item>
+        <item name="android:statusBarColor">@color/compact_bg</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:alertDialogTheme">@android:style/Theme.Material.Dialog.Alert</item>
+        <item name="android:colorBackground">@color/compact_bg</item>
+    </style>
+</resources>

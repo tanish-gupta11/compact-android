@@ -1,0 +1,15 @@
+SSIM identity=1.0 small noise=0.9994626051171537 large noise=0.925258964095235
+JPEG progressive=false type=1 quality=0.5 bytes=7979 -> 7199 pixels identical
+JPEG progressive=false type=10 quality=0.5 bytes=4729 -> 4366 pixels identical
+JPEG progressive=false type=1 quality=0.9 bytes=19171 -> 17625 pixels identical
+JPEG progressive=false type=10 quality=0.9 bytes=11215 -> 10548 pixels identical
+JPEG progressive=false type=1 quality=1.0 bytes=46701 -> 40192 pixels identical
+JPEG progressive=false type=10 quality=1.0 bytes=25512 -> 23315 pixels identical
+JPEG progressive=true type=1 quality=0.5 bytes=7267 -> 7199 pixels identical
+JPEG progressive=true type=10 quality=0.5 bytes=4490 -> 4366 pixels identical
+JPEG progressive=true type=1 quality=0.9 bytes=16827 -> 16827 pixels identical
+JPEG progressive=true type=10 quality=0.9 bytes=10226 -> 10226 pixels identical
+JPEG progressive=true type=1 quality=1.0 bytes=38392 -> 38392 pixels identical
+JPEG progressive=true type=10 quality=1.0 bytes=22002 -> 22002 pixels identical
+PASS 66 assertions
+PASS 60 adversarial JPEG cases (baseline/progressive, 4:4:4/4:2:0, restart 0/3/17, noise/flat/edges); candidate pixels identical. State and malformed-MP4 guards PASS.

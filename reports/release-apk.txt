@@ -1,0 +1,11 @@
+Verifies
+Verified using v1 scheme (JAR signing): false
+Verified using v2 scheme (APK Signature Scheme v2): false
+Verified using v3 scheme (APK Signature Scheme v3): true
+Verified using v3.1 scheme (APK Signature Scheme v3.1): false
+Verified using v4 scheme (APK Signature Scheme v4): false
+Verified for SourceStamp: false
+Number of signers: 1
+PASS com.compact signature, launcher, SDK 30/35, offline permissions, service/engine classes, license, release isolation
+APK bytes: 94757
+SHA256: D3AAA76667B3692083CBE0F5F8730A1832FA8ED0C59A4604BAE94B5D7CD92FB8
