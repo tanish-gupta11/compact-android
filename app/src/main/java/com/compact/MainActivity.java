@@ -457,7 +457,19 @@ public final class MainActivity extends Activity {
             return row;
           }
         });
-    body.addView(list, new LinearLayout.LayoutParams(-1, Ui.dp(this, 420)));
+    // The list must own scrolling: a ListView nested inside a ScrollView cannot scroll on phones,
+    // which left only the first few files reachable. The filters scroll away as a list header.
+    ScrollView scroll = (ScrollView) body.getParent();
+    scroll.removeView(body);
+    root.removeView(scroll);
+    body.setLayoutParams(new AbsListView.LayoutParams(-1, -2));
+    body.setPadding(0, body.getPaddingTop(), 0, body.getPaddingBottom());
+    list.addHeaderView(body, null, false);
+    int side = Ui.dp(this, 20);
+    list.setPadding(side, 0, side, side);
+    list.setClipToPadding(false);
+    list.setFastScrollEnabled(true);
+    root.addView(list, new LinearLayout.LayoutParams(-1, 0, 1));
   }
 
   private void options() {

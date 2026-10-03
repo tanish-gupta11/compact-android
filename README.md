@@ -8,6 +8,10 @@ permanently delete an irreplaceable original without checking the copy and keepi
 `TEST_REPORT.md` for passes and remaining limitations. Real POCO videos showed that Smart may correctly skip
 difficult footage and Max may visibly soften detail.
 
+The later **1.0.3 scrolling-fix build** keeps the same Android version code/name (6 / 1.0.3). It makes the Review
+file list itself scroll, with the filters as its header. Check the APK SHA-256 in the release page to distinguish
+it from the earlier 1.0.3 binary.
+
 ## What it does
 
 - **Smart (default):** videos → H.265 with the phone's hardware encoder, audio copied bit-for-bit; photos → HEIC

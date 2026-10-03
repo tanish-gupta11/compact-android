@@ -186,3 +186,14 @@ This is not proof that ordinary camera photos have the same problem, but photo d
 verified. The system confirmation UI for the new reviewed one-file Trash action was not exercised on personal media;
 the underlying Trash/Restore API path was tested only on generated media. No test can certify that Max looks good
 in every video scene or that an external backup exists.
+
+## 2026-10-03 — Review-list scrolling patch, unchanged Android version
+
+The local Review UI source differs from the earlier public 1.0.3 source only by moving the candidate ListView out
+of the parent ScrollView and adding the filters/actions as a non-selectable list header. This allows the list to own
+scrolling and enables fast-scroll. The local signed APK was built at 17:42:41 IST after the source edit at 17:42:31;
+it still reports versionName `1.0.3`, versionCode `6`. Inspection of **that APK's** `classes.dex` found the
+`ListView.addHeaderView`, `setClipToPadding`, and `setFastScrollEnabled` calls. The APK passed signature/package/
+permission verification and had SHA-256 `34A9E307B7B6807C1F838BFE1A2B828977CD62E0DCA9427AE8B415E2C25E7F21`.
+Host tests: 78 core assertions and 60 adversarial JPEG cases passed. No device was connected during this audit;
+the owner's reported 17:43 install and actual scrolling on-device could not be independently confirmed.
